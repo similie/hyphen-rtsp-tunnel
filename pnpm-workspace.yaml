@@ -1,0 +1,9 @@
+onlyBuiltDependencies:
+  - aws-sdk
+  - bcrypt
+  - cpu-features
+  - esbuild
+  - msgpackr-extract
+  - protobufjs
+  - sharp
+  - ssh2

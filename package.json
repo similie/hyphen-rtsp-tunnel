@@ -1,0 +1,50 @@
+{
+  "name": "@similie/hyphen-command-center-api",
+  "version": "1.1.0",
+  "description": "API for Hyphen Command Center. Manages devices, builds, payload forwarding, and device authentication.",
+  "license": "GPL-3.0-only",
+  "author": "adam.smith@similie.org",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec \"tsx src/index.ts\"",
+    "build": "tsc",
+    "start": "tsx src/index.ts",
+    "docs": "./node_modules/typedoc/bin/typedoc --out docs src",
+    "release": "npm run build && standard-version"
+  },
+  "dependencies": {
+    "@similie/ellipsies": "^1.0.16",
+    "aws-sdk": "^2.1692.0",
+    "bullmq": "^5.62.0",
+    "crypto-js": "^4.2.0",
+    "dockerode": "^4.0.9",
+    "dotenv": "^17.2.3",
+    "fs-extra": "^11.3.2",
+    "ioredis": "^5.8.2",
+    "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
+    "mqtt": "^5.14.1",
+    "msgpackr": "^1.11.5",
+    "node-fetch": "^3.3.2",
+    "redis": "^5.9.0",
+    "redlock": "5.0.0-beta.2",
+    "reflect-metadata": "^0.2.2",
+    "tar-fs": "^3.1.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "unzipper": "^0.12.3",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^24.9.2",
+    "class-validator": "^0.14.2",
+    "nodemon": "^3.1.10",
+    "standard-version": "^9.5.0",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.20.6",
+    "typedoc": "^0.28.14"
+  }
+}

@@ -1,0 +1,6 @@
+.DS_Store
+node_modules
+image_builds
+*.code-workspace
+.env
+dist
