@@ -4,3 +4,8 @@ image_builds
 *.code-workspace
 .env
 dist
+snapshots
+ftp-root
+staging
+localhost+2*
+pnpm-workspace.yaml

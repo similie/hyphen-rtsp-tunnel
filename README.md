@@ -1,158 +1,491 @@
-# 🌐 Hyphen Command Center API
+# @similie/hyphen-rtsp-tunnel
 
-**Hyphen Command Center API** is the backend service of the **Hyphen ecosystem** —  
-Similie's open, extensible infrastructure for IoT device management, firmware builds,  
-and secure real-time communication through MQTT.
-
-It is built on top of [**Ellipsies**](https://github.com/similie/ellipsies) —  
-Similie's TypeScript framework for service orchestration using **TypeORM**, **routing-controllers**,  
-and **dependency injection** — enabling fast, modular, production-grade microservices.
+**Secure, low-cost RTSP snapshot tunneling for distributed environmental monitoring**
 
 ---
 
-## 🧭 Overview
+## Why this exists
 
-The Hyphen Command Center API acts as the **control plane** for connected devices.  
-It manages:
+At **Similie**, we’re always looking for ways to make **low-cost technology have research-grade impact**.
 
-- Device registration, telemetry, and command routing
-- Secure MQTT communication (AWS IoT Core or alternative brokers)
-- Firmware build orchestration through isolated Docker build containers
-- Payload forwarding to subscribed services
-- Authentication, authorization, and configuration lifecycle
+Many communities—especially in emerging and climate-vulnerable regions—already have access to **consumer-grade IP cameras**. These cameras are affordable, reliable, and widely available, but they’re rarely designed to operate in:
 
-This API is designed to integrate directly with:
+- Intermittent connectivity environments
+- Outside local area networks (LAN) infrastructures
+- Horizontally scaled server architectures
+- Scientific or humanitarian data pipelines
 
-- 🖥️ [**Hyphen Command Center (Frontend UI)**](https://github.com/similie/hyphen-command-center) —  
-  SvelteKit-based interface for managing devices, builds, and operations
-- 🔌 [**Hyphen Connect**](https://github.com/similie/hyphen-connect) —  
-  The ESP32-compatible firmware client library that allows embedded systems to connect securely
+The outputs are often pushed to proprietary/paid services for home monitoring and security use cases. Similie seeks to bypass these limitations, by tapping into the RTSP outputs found on many consumer-grade cameras.
 
----
+This project bridges the gap between cost, access, deployability, and open operability.
 
-## 🧱 Architecture
+**`@similie/hyphen-rtsp-tunnel`** allows low-power edge devices (for example, ESP32-based gateways) to securely tunnel RTSP camera streams over WebSockets to a centralized server, capture snapshots, and feed them into modern processing pipelines—**without exposing cameras directly to the internet**.
 
-                    ┌────────────────────────┐
-                    │   Hyphen Command UI    │
-                    │ (SvelteKit Frontend)   │
-                    └──────────┬─────────────┘
-                               │
-                  REST / SSE   │
-                               ▼
-                   ┌──────────────────────────┐
-                   │ Hyphen Command Center API│
-                   │  (Node.js / Express)     │
-                   │                          │
-                   │ • Auth / Identity        │
-                   │ • Device Registry        │
-                   │ • MQTT Integration       │
-                   │ • Job Queue (BullMQ)     │
-                   │ • Webhooks / Streams     │
-                   └──────────┬───────────────┘
-                              │
-                              ▼
-                ┌──────────────────────────────┐
-                │ PostgreSQL / TimescaleDB     │
-                │ (Ellipsies ORM Schema)       │
-                └──────────────────────────────┘
-                              │
-                              ▼
-                ┌──────────────────────────────┐
-                │ MQTT Broker (AWS IoT Core)   │
-                │   + Leader Election via Redis│
-                └──────────────────────────────┘
+The result:
+
+> **Consumer hardware, safely integrated into professional-grade monitoring systems**
 
 ---
 
-```mermaid
-flowchart TD
-  CC["Hyphen Command Center (Web UI)"] <--> API["Hyphen Command Center API"]
-  API <--> Ellipsies["Ellipsies (Orchestration & Workflow Engine)"]
-  API <--> MQTT["MQTT Broker + Certificate Authority"]
-  MQTT <--> OS["HyphenOS (Device Runtime)"]
-  OS --> Sensors["Sensors / Actuators"]
-  CC --> Forwarders["Forwarders / Decoders"]
-  Forwarders --> External["External Systems / Data Pipelines"]
+## What this module does
+
+This package implements a **Hyphen Command Center plugin** that:
+
+- Accepts **secure WebSocket connections** from edge devices
+- Authenticates devices using a challenge-response handshake (pluggable)
+- Creates a **temporary RTSP tunnel** over WebSockets
+- Captures a snapshot using `ffmpeg`
+- Emits structured events for downstream processing (storage, queues, AI, etc.)
+
+Design constraints:
+
+- The gateway **does not assume storage or cloud providers**
+- The gateway **does not block on uploads**
+- The gateway is **leader-aware** for horizontal scaling
+
+---
+
+## High-level architecture
+
+```
+┌─────────────┐
+│ IP Camera   │
+│ (RTSP)      │
+└─────┬───────┘
+│ 192.168.4.x (private AP)
+┌─────▼───────┐
+│ HyphenOS.   |
+| Enabled     │
+│ Device      │
+│ (ESP32)     │
+│             │
+│ RTSP ↔ WSS  │
+└─────┬───────┘
+│ Secure WebSocket
+▼
+┌───────────────────────┐
+│ Command Center API    │
+│                       │
+│  RTSP Tunnel Gateway  │
+│   - ffmpeg snapshot   │
+│   - auth handshake    │
+│   - leader-aware      │
+└─────────┬─────────────┘
+│ events
+▼
+┌────────────────────────────┐
+│ Storage / Queue / AI       │
+│ (pluggable, async)         │
+└────────────────────────────┘
 ```
 
-## ⚡ Features
+---
 
-- **Device Management:** Register, monitor, and control Hyphen-compatible devices
-- **MQTT Integration:** Dynamic subscriptions with leader election via Redis
-- **Job Queueing:** Asynchronous background processing with BullMQ
-- **Database Migrations:** Fully managed with Drizzle ORM and TimescaleDB
-- **Streaming API:** Real-time server-sent events for build and telemetry
-- **Docker Builds:** On-demand PlatformIO firmware builds via Docker socket
-- **Secure Auth:** Role-based access using JWT and bcrypt
-- **Extensible:** Modular service runners and seeding system
+## Key design principles
+
+### 🔐 Secure by default
+
+- Cameras are **never exposed** to the public internet
+- RTSP traffic only flows inside a **temporary authenticated tunnel**
+- Device authentication is **pluggable** (RSA, certificates, future identity systems)
+
+### 🌍 Designed for constrained environments
+
+- Works with **low-power devices**
+- Handles **intermittent connectivity**
+- Snapshot windows automatically clean up on failure
+
+### ⚖️ Horizontally scalable
+
+- Leader-aware via Redis-based leader election
+- Only one gateway handles RTSP capture at a time
+- Multiple servers can process downstream jobs
+
+### 🧩 Modular & extensible
+
+- Storage is event-driven, not hard-coded
+- Queue notification is optional and pluggable
+- Designed to integrate with broader data pipelines
 
 ---
 
-## 🧰 Prerequisites
-
-Before running the API, ensure the following are installed:
-
-- [Node.js 20+](https://nodejs.org)
-- [pnpm](https://pnpm.io)
-- [Docker](https://www.docker.com/)
-- [PostgreSQL 16+ / TimescaleDB](https://www.timescale.com/)
-- [Redis 7+](https://redis.io)
-
-Environment variables are defined in `.env`:
+## Installation
 
 ```bash
-# Database
-DATABASE_URL=postgresql://postgres:postgres@db:5432/hyphen
-
-# Make sure you have your MQTT Broker
-MQTT_HOST=a123456.iot.ap-southeast-1.amazonaws.com
-MQTT_PORT=8883
-
-# set your AWS Credentials
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-
-# Redis
-REDIS_URL=redis://redis:6379
-
-# Clone the repository
-git clone https://github.com/similie/hyphen-command-center-api.git
-cd hyphen-command-center-api
-
-# Install dependencies
-pnpm install
-
-# Run in development
-pnpm dev
-
-DB_HOST=localhost
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_PORT=5432
-DB_DATABASE=hyphen_api # this database is not share with Hyphen Command Center UI
-MQTT_IOT_ENDPOINT=a123456.iot.us-east-1.amazonaws.com
-MQTT_IOT_PORT=8883
-SYSTEM_IDENTITY_NAME=CommandCenter # this is the default. The name of the command center app on MQTT
-AWS_REGION=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-MQTT_SUBSCRIPTIONS="Hy/#" # this is the base MQTT topic for listing to payloads. Similie using "Hy/# in production"
-JWT_CLIENT_SECRET=MySuperSecret # this MUST match the UI frontend secret key. The JWT coming from your UI must be decoded by the API
-ENV_SECRET_KEY=AnotherSecretForSecrets # we encrypt values in the database. This is a secret key for that encryption
-REDIS_CONFIG_URL=redis://localhost:6379/1 # this needs to be the same redis URL and DB as the UI.
-HOST_BUILDS_PATH= # this defaults to os.tmpDir but for our docker containers, we need to specify
-API_SERVICE_ROUTES=/api/v2/ # Similie microservices are on version 2
-API_SERVICE_ROUTES=1612 # 1612 is the service port for this application
-
+npm install @similie/hyphen-rtsp-tunnel
 ```
 
-## 🧠 Developer Notes
+This package is designed to be used inside a Hyphen Command Center API instance.
+It is not a standalone server binary.
 
-- Designed to scale with leader election that ensures only one container processes MQTT messages at a time.
-- Docker socket mounting allows isolated firmware build environments.
-- Seeds are executed via as functions in your models.
-- Easily manage your fleet security with certificate-based access to your network
-- Requires Hyphen Connect and ESP32-based hardware (some features require HyphenOS).
+---
+
+## Requirements
+
+This module spans **device firmware** (HyphenOS) and **server infrastructure** (Hyphen Command Center + ffmpeg). Make sure the full stack meets the minimum versions below.
+
+### 1) Device Firmware (HyphenOS)
+
+You need **HyphenOS v1.0.19+** with the IPCamera + WiFi AP feature enabled.
+
+At minimum, your firmware build must include these `build_flags` (example shown using PlatformIO-style flags):
+
+```ini
+; --- Enable WiFi AP mode (camera LAN) ---
+-D HYPHEN_WIFI_AP_ENABLE=1
+-D HYPHEN_WIFI_AP_SSID=\"HyphenCam-001\"
+-D HYPHEN_WIFI_AP_PASS=\"hyphen1234\"
+-D HYPHEN_WIFI_AP_CHANNEL=6
+-D HYPHEN_WIFI_AP_MAX_CLIENTS=4
+-D HYPHEN_HIDE_WIFI_AP=0
+; --- Camera endpoint on AP LAN ---
+-D HYPHEN_CAM_HOST=\"192.168.4.216\"
+-D HYPHEN_CAM_PORT=554
+
+; --- WSS tunnel endpoint (Hyphen Command Center API) ---
+-D HYPHEN_WSS_HOST=\"192.168.18.215\"
+-D HYPHEN_WSS_PORT=7443
+-D HYPHEN_WSS_PATH=\"/\"
+
+; --- Snapshot cadence ---
+-D HYPHEN_IPCAM_OFFSET_DEFAULT=1   ; (publish() cadence multiplier)
+-D HYPHEN_IPCAM_TUNNEL_TIMEOUT_MS=45000
+
+; --- AP static network (optional but recommended for determinism) ---
+-D HYPHEN_WIFI_AP_IP_0=192
+-D HYPHEN_WIFI_AP_IP_1=168
+-D HYPHEN_WIFI_AP_IP_2=4
+-D HYPHEN_WIFI_AP_IP_3=1
+
+-D HYPHEN_WIFI_AP_MASK_0=255
+-D HYPHEN_WIFI_AP_MASK_1=255
+-D HYPHEN_WIFI_AP_MASK_2=255
+-D HYPHEN_WIFI_AP_MASK_3=0
+```
+
+Notes:
+
+- The camera is expected to be reachable on the Hyphen device’s AP LAN (e.g. 192.168.4.x).
+- The WSS host/port/path are compiled into the device firmware, so the server does not “discover” the camera endpoint.
+
+### 2) Hyphen Command Center Versions
+
+This module is designed to run inside the Hyphen Command Center stack.
+
+Minimum versions:
+
+- Hyphen Command Center API v1.1.1+
+- Hyphen Command Center (UI) v1.1.2+
+
+You can override env variable defaults if you include the following in the IP Camera "Sensor" metadata in Command Center:
+
+- CAM_PASS=admin
+- CAM_USER=mycamerapassword
+- RTSP_PATH=/stream2 # the RTSP stream to pull
+
+### 3) Server Runtime: ffmpeg
+
+The server process that hosts this plugin must have ffmpeg installed and available on the PATH (or wrapped in your runtime container image).
+Quick install:
+
+#### Ubuntu/Debian
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ffmpeg
+```
+
+#### Fedora
+
+```bash
+sudo dnf install -y ffmpeg
+```
+
+#### macOS (Home)
+
+```bash
+brew install ffmpeg
+```
+
+#### Docker
+
+If you run Command Center in containers, ensure your image includes ffmpeg (for Debian-based images):
+
+```dockerfile
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+```
+
+### 4) Optional: AWS SQS (Downstream notifications)
+
+If you want the gateway to emit snapshot events to SQS, you must configure AWS credentials + region and provide:
+• AWS_REGION
+• SQS_QUEUE_URL
+
+If these are not set, the SQS notifier remains disabled and the module still works normally.
+
+---
+
+## Quick Debugging Checklist
+
+Before debugging code, verify these basics — **90% of issues show up here**.
+
+### Device (HyphenOS)
+
+- [ ] Device is running **HyphenOS v1.0.19+**
+- [ ] WiFi AP is visible (e.g. `HyphenCam-001`)
+- [ ] Camera is connected to the device AP
+- [ ] Camera responds from the device:
+  - RTSP reachable at `rtsp://<CAM_HOST>:<CAM_PORT><RTSP_PATH>`
+- [ ] Device can resolve and reach the Command Center WSS host
+- [ ] `HELLO` and `AUTH_OK` appear in Command Center logs
+
+### Network
+
+- [ ] **WSS port is reachable** from the device network
+- [ ] No firewall blocking:
+  - WebSocket port (`WS_PORT`)
+  - Local proxy port (`PROXY_PORT`) on the server
+- [ ] TLS certs are valid if `WS_TLS=1`
+
+### Command Center API
+
+- [ ] Running **Hyphen Command Center API v1.1.1+**
+- [ ] Module `@similie/hyphen-rtsp-tunnel` is loaded at startup
+- [ ] Redis is reachable (leader election + caching)
+- [ ] Device identity exists and resolves correctly
+
+### ffmpeg
+
+- [ ] `ffmpeg` is installed and on `PATH`
+- [ ] Running `ffmpeg -version` works in the same environment
+- [ ] `ffmpeg` can open the RTSP proxy URL:
+  ```bash
+  ffmpeg -rtsp_transport tcp -i rtsp://127.0.0.1:8554/stream2 -frames:v 1 test.jpg
+  ```
+- No other capture is already in progress (single-capture lock)
+
+### Storage / Output
+
+- OUT_DIR exists and is writable
+- Snapshot files appear on successful capture
+- Downstream listeners (SQS, workers, etc.) are optional and non-blocking
+
+## Usage: Command Center Plugin
+
+```bash
+# .env
+HYPHEN_MODULES=@similie/hyphen-rtsp-tunnel-module # comma-separated for additional modules
+```
+
+## Environment Variables
+
+The gateway is fully configured via environment variables.
+
+## Environment Variables
+
+All configuration for `@similie/hyphen-rtsp-tunnel` is provided via environment variables.
+
+### Gateway & Networking
+
+| Variable     | Default | Description                                       |
+| ------------ | ------- | ------------------------------------------------- |
+| `WS_PORT`    | `7443`  | Port for the WebSocket gateway                    |
+| `WS_TLS`     | `0`     | Enable TLS for WebSocket server (`1` = HTTPS/WSS) |
+| `TLS_CERT`   | —       | Path to TLS certificate (required if `WS_TLS=1`)  |
+| `TLS_KEY`    | —       | Path to TLS private key (required if `WS_TLS=1`)  |
+| `PROXY_PORT` | `8554`  | Local TCP proxy port used by FFmpeg               |
+
+---
+
+### RTSP / Camera
+
+| Variable    | Default    | Description          |
+| ----------- | ---------- | -------------------- |
+| `CAM_USER`  | `admin`    | RTSP camera username |
+| `CAM_PASS`  | —          | RTSP camera password |
+| `RTSP_PATH` | `/stream2` | RTSP stream path     |
+
+> **Note:**  
+> The camera **host and port are NOT configured server-side**.  
+> The ESP32 device determines the camera endpoint via its own build flags.
+
+---
+
+### Capture Behavior
+
+| Variable             | Default | Description                                  |
+| -------------------- | ------- | -------------------------------------------- |
+| `AUTO_CAPTURE`       | `1`     | Automatically capture on device connection   |
+| `CAPTURE_TIMEOUT_MS` | `45000` | Maximum capture duration before abort        |
+| `HELLO_WAIT_MS`      | `2000`  | Time to wait for HELLO before closing socket |
+
+---
+
+### Authentication
+
+| Variable       | Default | Description                           |
+| -------------- | ------- | ------------------------------------- |
+| `REQUIRE_AUTH` | `1`     | Require AUTH handshake before capture |
+
+Authentication is currently based on Command Center/Device Certificate Signatures.
+
+---
+
+### Storage
+
+| Variable  | Default           | Description                          |
+| --------- | ----------------- | ------------------------------------ |
+| `OUT_DIR` | OS temp directory | Local directory for snapshot storage |
+
+---
+
+### AWS / SQS (Optional)
+
+These are only required if using the SQS notifier.
+
+| Variable        | Description                    |
+| --------------- | ------------------------------ |
+| `AWS_REGION`    | AWS region                     |
+| `SQS_QUEUE_URL` | SQS queue URL (FIFO supported) |
+
+If these variables are not present, the notifier is automatically disabled.
+
+---
+
+## Device Handshake Flow
+
+```
+Server → READY
+Device → HELLO [payloadId] deviceId
+Server → CHAL
+Device → AUTH deviceId
+Server → AUTH_OK
+Server → OPEN
+```
+
+---
+
+## Events Emitted
+
+The RTSP tunnel gateway exposes an internal event emitter so that **capture, storage, and downstream processing can be fully decoupled**.
+
+### `snapshot:captured`
+
+Emitted when a snapshot is successfully captured and written to local temporary storage.
+
+```ts
+{
+  sessionId: string;
+  deviceId: string;
+  payloadId: string | null;
+  localPath: string;
+  capturedAt: string;
+}
+```
+
+Typical consumers of this event include:
+
+- Storage adapters (S3, NFS, local disk)
+- Queue notifiers (SQS, BullMQ, Redis)
+- Video stitching pipelines
+- AI / image-processing workers (e.g. 4Shadow)
+
+### `snapshot:failed`
+
+Emitted whenever a snapshot attempt fails at any stage.
+
+```ts
+{
+  stage: "auth" | "capture" | "timeout" | "ffmpeg";
+  error: string;
+}
+```
+
+This allows downstream systems to log, alert, retry, or back off without blocking the gateway.
+
+---
+
+## Storage Responsibility (Intentional Design)
+
+We have stubbed out this plugin to work well for our workflows, but out of the box you may need to implement logic to
+support your own workflows
+
+This module does not:
+
+- Upload images to S3 (without configuration)
+- Push messages to SQS or Redis (without configuration)
+- Persist database records
+- Perform AI or video processing
+
+The gateway’s responsibility ends at secure capture and local persistence.
+
+This keeps the system:
+
+- Non-blocking
+- Fault tolerant
+- Horizontally scalable
+- Easy to extend with new pipelines
+
+All heavy or slow work is expected to run in downstream workers.
+
+---
+
+## Scaling & High Availability
+
+The RTSP tunnel is designed to operate in clustered environments:
+
+- Uses leader election so only one instance captures
+- Other nodes remain idle and ready for failover
+- Safe to run behind load balancers
+- Compatible with Redis-backed horizontal scaling
+
+This avoids duplicate captures while preserving resilience.
+
+---
+
+## Security Model
+
+Security is enforced through layered constraints:
+
+- TLS-secured WebSocket transport
+- Device-initiated outbound connections only
+- Optional cryptographic authentication (nonce + signature)
+- No inbound RTSP exposure
+- Camera network remains isolated behind the device
+
+This design minimizes attack surface and removes the need to expose cameras directly to the internet.
+
+---
+
+### Who This Is For
+
+- Environmental sensing networks
+- Flood and climate early-warning systems
+- Research deployments using consumer-grade cameras
+- Edge-to-cloud ingestion pipelines
+- Teams who need secure camera access without RTSP exposure
+
+---
+
+## Philosophy
+
+At Similie, we believe that low-cost, open technology can deliver research-grade impact.
+
+This module is part of a broader effort to make climate monitoring, early warning, and environmental intelligence:
+
+- Accessible
+- Affordable
+- Open
+- Locally deployable
+- Globally scalable
+
+---
+
+### License
+
+MIT © Similie
+
+### Hyphen Ecosystem
 
 | Project                   | Description                                                                                                                       | Repository                                       |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -160,38 +493,5 @@ API_SERVICE_ROUTES=1612 # 1612 is the service port for this application
 | **HyphenConnect**         | Network + MQTT abstraction layer for ESP32 / Cellular devices. Enables function calls, variable access, and secure OTA.           | https://github.com/similie/hyphen-connect        |
 | **Hyphen Command Center** | SvelteKit UI for managing your global device fleet, OTA updates, telemetry, and configuration.                                    | https://github.com/similie/hyphen-command-center |
 | **Hyphen Elemental**      | The hardware schematics Similie uses to for our Hyphen Elemental 4 line of Products.                                              | https://github.com/similie/hyphen-elemental      |
+| **Hyphen Video Encode**   | A video stream processor for the RTSP Camera Workflow. Turn snaps into daily images.                                              | https://github.com/similie/hyphen-videoencoder   |
 | **Ellipsies**             | Workflow + routing engine powering the API: device identity, build pipeline, users, orgs, storage, and message routing.           | https://github.com/similie/ellipsies             |
-
-## 🧑‍💻 Contributing
-
-We welcome community collaboration!
-
-To contribute:
-
-1.  Fork this repository
-2.  Create a feature branch
-3.  Submit a pull request describing your changes
-
-All contributions are licensed under the same terms as the main project (GPLv3 + Similie commercial terms).
-
-## 🪪 License
-
-This project is licensed under the GPLv3 License with additional commercial-use terms.
-
-Use of this software or any derivatives for commercial or for-profit purposes
-requires a commercial license from Similie.
-Contact: licensing@similie.org￼
-
-See the full license in LICENSE.md￼
-
-## 🌍 About Similie
-
-Similie builds technology for climate resilience and community empowerment.
-We develop IoT platforms, AI tools, and open-source systems to help communities better manage weather, water, and environmental risks.
-
-🌐 https://similie.com
-
-### Hyphen Command Center API
-
-© 2025 Similie￼ — All Rights Reserved
-Licensed under GPLv3 with Similie Commercial Use Terms
