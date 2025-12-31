@@ -1,6 +1,6 @@
 {
   "name": "@similie/hyphen-rtsp-tunnel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "API module for Hyphen Command Center. Provides REST and WebSocket interfaces for managing RTSP streams and related services.",
   "license": "MIT",
   "author": "adam.smith@similie.org",

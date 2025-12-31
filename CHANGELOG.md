@@ -1,0 +1,11 @@
+# Changelog
+
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
+## 1.1.0 (2025-12-31)
+
+
+### Features
+
+* initial feature set ([e0337de](https://github.com/similie/hyphen-rtsp-tunnel/commit/e0337decff06c748721c093635e043bf3c2be546))
+* initial feature set complete ([072d609](https://github.com/similie/hyphen-rtsp-tunnel/commit/072d6094da8831849dc85c43ea2a65fdb7d5504d))
