@@ -1,0 +1,457 @@
+<!DOCTYPE html><html class="default" lang="en" data-base="./"><head><meta charset="utf-8"/><meta http-equiv="x-ua-compatible" content="IE=edge"/><title>@similie/hyphen-rtsp-tunnel</title><meta name="description" content="Documentation for @similie/hyphen-rtsp-tunnel"/><meta name="viewport" content="width=device-width, initial-scale=1"/><link rel="stylesheet" href="assets/style.css"/><link rel="stylesheet" href="assets/highlight.css"/><script defer src="assets/main.js"></script><script async src="assets/icons.js" id="tsd-icons-script"></script><script async src="assets/search.js" id="tsd-search-script"></script><script async src="assets/navigation.js" id="tsd-nav-script"></script></head><body><script>document.documentElement.dataset.theme = localStorage.getItem("tsd-theme") || "os";document.body.style.display="none";setTimeout(() => window.app?app.showPage():document.body.style.removeProperty("display"),500)</script><header class="tsd-page-toolbar"><div class="tsd-toolbar-contents container"><a href="index.html" class="title">@similie/hyphen-rtsp-tunnel</a><div id="tsd-toolbar-links"></div><button id="tsd-search-trigger" class="tsd-widget" aria-label="Search"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-search"></use></svg></button><dialog id="tsd-search" aria-label="Search"><input role="combobox" id="tsd-search-input" aria-controls="tsd-search-results" aria-autocomplete="list" aria-expanded="true" autocapitalize="off" autocomplete="off" placeholder="Search the docs" maxLength="100"/><ul role="listbox" id="tsd-search-results"></ul><div id="tsd-search-status" aria-live="polite" aria-atomic="true"><div>Preparing search index...</div></div></dialog><a href="#" class="tsd-widget menu" id="tsd-toolbar-menu-trigger" data-toggle="menu" aria-label="Menu"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-menu"></use></svg></a></div></header><div class="container container-main"><div class="col-content"><div class="tsd-page-title"><h1>@similie/hyphen-rtsp-tunnel</h1></div><div class="tsd-panel tsd-typography"><h1 id="similiehyphen-rtsp-tunnel" class="tsd-anchor-link">@similie/hyphen-rtsp-tunnel<a href="#similiehyphen-rtsp-tunnel" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h1><p><strong>Secure, low-cost RTSP snapshot tunneling for distributed environmental monitoring</strong></p>
+<hr>
+<h2 id="why-this-exists" class="tsd-anchor-link">Why this exists<a href="#why-this-exists" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>At <strong>Similie</strong>, we’re always looking for ways to make <strong>low-cost technology have research-grade impact</strong>.</p>
+<p>Many communities—especially in emerging and climate-vulnerable regions—already have access to <strong>consumer-grade IP cameras</strong>. These cameras are affordable, reliable, and widely available, but they’re rarely designed to operate in:</p>
+<ul>
+<li>Intermittent connectivity environments</li>
+<li>Outside local area networks (LAN) infrastructures</li>
+<li>Horizontally scaled server architectures</li>
+<li>Scientific or humanitarian data pipelines</li>
+</ul>
+<p>The outputs are often pushed to proprietary/paid services for home monitoring and security use cases. Similie seeks to bypass these limitations, by tapping into the RTSP outputs found on many consumer-grade cameras.</p>
+<p>This project bridges the gap between cost, access, deployability, and open operability.</p>
+<p><strong><code>@similie/hyphen-rtsp-tunnel</code></strong> allows low-power edge devices (for example, ESP32-based gateways) to securely tunnel RTSP camera streams over WebSockets to a centralized server, capture snapshots, and feed them into modern processing pipelines—<strong>without exposing cameras directly to the internet</strong>.</p>
+<p>The result:</p>
+<blockquote>
+<p><strong>Consumer hardware, safely integrated into professional-grade monitoring systems</strong></p>
+</blockquote>
+<hr>
+<h2 id="what-this-module-does" class="tsd-anchor-link">What this module does<a href="#what-this-module-does" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>This package implements a <strong>Hyphen Command Center plugin</strong> that:</p>
+<ul>
+<li>Accepts <strong>secure WebSocket connections</strong> from edge devices</li>
+<li>Authenticates devices using a challenge-response handshake (pluggable)</li>
+<li>Creates a <strong>temporary RTSP tunnel</strong> over WebSockets</li>
+<li>Captures a snapshot using <code>ffmpeg</code></li>
+<li>Emits structured events for downstream processing (storage, queues, AI, etc.)</li>
+</ul>
+<p>Design constraints:</p>
+<ul>
+<li>The gateway <strong>does not assume storage or cloud providers</strong></li>
+<li>The gateway <strong>does not block on uploads</strong></li>
+<li>The gateway is <strong>leader-aware</strong> for horizontal scaling</li>
+</ul>
+<hr>
+<h2 id="high-level-architecture" class="tsd-anchor-link">High-level architecture<a href="#high-level-architecture" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><pre><code><span class="hl-0">┌─────────────┐</span><br/><span class="hl-0">│ </span><span class="hl-1">IP</span><span class="hl-0"> </span><span class="hl-2">Camera</span><span class="hl-0">   │</span><br/><span class="hl-0">│ (</span><span class="hl-1">RTSP</span><span class="hl-0">)      │</span><br/><span class="hl-0">└─────┬───────┘</span><br/><span class="hl-0">│ </span><span class="hl-3">192.168</span><span class="hl-0">.4.</span><span class="hl-4">x</span><span class="hl-0"> (</span><span class="hl-2">private</span><span class="hl-0"> </span><span class="hl-1">AP</span><span class="hl-0">)</span><br/><span class="hl-0">┌─────▼───────┐</span><br/><span class="hl-0">│ </span><span class="hl-2">HyphenOS</span><span class="hl-0">.   |</span><br/><span class="hl-0">| </span><span class="hl-2">Enabled</span><span class="hl-0">     │</span><br/><span class="hl-0">│ </span><span class="hl-2">Device</span><span class="hl-0">      │</span><br/><span class="hl-0">│ (</span><span class="hl-1">ESP32</span><span class="hl-0">)     │</span><br/><span class="hl-0">│             │</span><br/><span class="hl-0">│ </span><span class="hl-1">RTSP</span><span class="hl-0"> ↔ </span><span class="hl-1">WSS</span><span class="hl-0">  │</span><br/><span class="hl-0">└─────┬───────┘</span><br/><span class="hl-0">│ </span><span class="hl-2">Secure</span><span class="hl-0"> </span><span class="hl-2">WebSocket</span><br/><span class="hl-0">▼</span><br/><span class="hl-0">┌───────────────────────┐</span><br/><span class="hl-0">│ </span><span class="hl-2">Command</span><span class="hl-0"> </span><span class="hl-2">Center</span><span class="hl-0"> </span><span class="hl-1">API</span><span class="hl-0">    │</span><br/><span class="hl-0">│                       │</span><br/><span class="hl-0">│  </span><span class="hl-1">RTSP</span><span class="hl-0"> </span><span class="hl-2">Tunnel</span><span class="hl-0"> </span><span class="hl-2">Gateway</span><span class="hl-0">  │</span><br/><span class="hl-0">│   - </span><span class="hl-2">ffmpeg</span><span class="hl-0"> </span><span class="hl-2">snapshot</span><span class="hl-0">   │</span><br/><span class="hl-0">│   - </span><span class="hl-2">auth</span><span class="hl-0"> </span><span class="hl-2">handshake</span><span class="hl-0">    │</span><br/><span class="hl-0">│   - </span><span class="hl-2">leader</span><span class="hl-0">-</span><span class="hl-2">aware</span><span class="hl-0">      │</span><br/><span class="hl-0">└─────────┬─────────────┘</span><br/><span class="hl-0">│ </span><span class="hl-2">events</span><br/><span class="hl-0">▼</span><br/><span class="hl-0">┌────────────────────────────┐</span><br/><span class="hl-0">│ </span><span class="hl-2">Storage</span><span class="hl-0"> / </span><span class="hl-2">Queue</span><span class="hl-0"> / </span><span class="hl-1">AI</span><span class="hl-0">       │</span><br/><span class="hl-0">│ (</span><span class="hl-2">pluggable</span><span class="hl-0">, </span><span class="hl-2">async</span><span class="hl-0">)         │</span><br/><span class="hl-0">└────────────────────────────┘</span>
+</code><button>Copy</button></pre>
+
+<hr>
+<h2 id="key-design-principles" class="tsd-anchor-link">Key design principles<a href="#key-design-principles" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><h3 id="🔐-secure-by-default" class="tsd-anchor-link">🔐 Secure by default<a href="#🔐-secure-by-default" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>Cameras are <strong>never exposed</strong> to the public internet</li>
+<li>RTSP traffic only flows inside a <strong>temporary authenticated tunnel</strong></li>
+<li>Device authentication is <strong>pluggable</strong> (RSA, certificates, future identity systems)</li>
+</ul>
+<h3 id="🌍-designed-for-constrained-environments" class="tsd-anchor-link">🌍 Designed for constrained environments<a href="#🌍-designed-for-constrained-environments" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>Works with <strong>low-power devices</strong></li>
+<li>Handles <strong>intermittent connectivity</strong></li>
+<li>Snapshot windows automatically clean up on failure</li>
+</ul>
+<h3 id="⚖️-horizontally-scalable" class="tsd-anchor-link">⚖️ Horizontally scalable<a href="#⚖️-horizontally-scalable" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>Leader-aware via Redis-based leader election</li>
+<li>Only one gateway handles RTSP capture at a time</li>
+<li>Multiple servers can process downstream jobs</li>
+</ul>
+<h3 id="🧩-modular-extensible" class="tsd-anchor-link">🧩 Modular &amp; extensible<a href="#🧩-modular-extensible" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>Storage is event-driven, not hard-coded</li>
+<li>Queue notification is optional and pluggable</li>
+<li>Designed to integrate with broader data pipelines</li>
+</ul>
+<hr>
+<h2 id="installation" class="tsd-anchor-link">Installation<a href="#installation" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><pre><code class="bash"><span class="hl-4">npm</span><span class="hl-0"> </span><span class="hl-5">install</span><span class="hl-0"> </span><span class="hl-5">@similie/hyphen-rtsp-tunnel</span>
+</code><button type="button">Copy</button></pre>
+
+<p>This package is designed to be used inside a Hyphen Command Center API instance.
+It is not a standalone server binary.</p>
+<hr>
+<h2 id="requirements" class="tsd-anchor-link">Requirements<a href="#requirements" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>This module spans <strong>device firmware</strong> (HyphenOS) and <strong>server infrastructure</strong> (Hyphen Command Center + ffmpeg). Make sure the full stack meets the minimum versions below.</p>
+<h3 id="1-device-firmware-hyphenos" class="tsd-anchor-link">1) Device Firmware (HyphenOS)<a href="#1-device-firmware-hyphenos" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>You need <strong>HyphenOS v1.0.19+</strong> with the IPCamera + WiFi AP feature enabled.</p>
+<p>At minimum, your firmware build must include these <code>build_flags</code> (example shown using PlatformIO-style flags):</p>
+<pre><code class="ini">; --- Enable WiFi AP mode (camera LAN) ---
+-D HYPHEN_WIFI_AP_ENABLE=1
+-D HYPHEN_WIFI_AP_SSID=\"HyphenCam-001\"
+-D HYPHEN_WIFI_AP_PASS=\"hyphen1234\"
+-D HYPHEN_WIFI_AP_CHANNEL=6
+-D HYPHEN_WIFI_AP_MAX_CLIENTS=4
+-D HYPHEN_HIDE_WIFI_AP=0
+; --- Camera endpoint on AP LAN ---
+-D HYPHEN_CAM_HOST=\"192.168.4.216\"
+-D HYPHEN_CAM_PORT=554
+
+; --- WSS tunnel endpoint (Hyphen Command Center API) ---
+-D HYPHEN_WSS_HOST=\"192.168.18.215\"
+-D HYPHEN_WSS_PORT=7443
+-D HYPHEN_WSS_PATH=\"/\"
+
+; --- Snapshot cadence ---
+-D HYPHEN_IPCAM_OFFSET_DEFAULT=1   ; (publish() cadence multiplier)
+-D HYPHEN_IPCAM_TUNNEL_TIMEOUT_MS=45000
+
+; --- AP static network (optional but recommended for determinism) ---
+-D HYPHEN_WIFI_AP_IP_0=192
+-D HYPHEN_WIFI_AP_IP_1=168
+-D HYPHEN_WIFI_AP_IP_2=4
+-D HYPHEN_WIFI_AP_IP_3=1
+
+-D HYPHEN_WIFI_AP_MASK_0=255
+-D HYPHEN_WIFI_AP_MASK_1=255
+-D HYPHEN_WIFI_AP_MASK_2=255
+-D HYPHEN_WIFI_AP_MASK_3=0
+</code><button type="button">Copy</button></pre>
+
+<p>Notes:</p>
+<ul>
+<li>The camera is expected to be reachable on the Hyphen device’s AP LAN (e.g. 192.168.4.x).</li>
+<li>The WSS host/port/path are compiled into the device firmware, so the server does not “discover” the camera endpoint.</li>
+</ul>
+<h3 id="2-hyphen-command-center-versions" class="tsd-anchor-link">2) Hyphen Command Center Versions<a href="#2-hyphen-command-center-versions" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>This module is designed to run inside the Hyphen Command Center stack.</p>
+<p>Minimum versions:</p>
+<ul>
+<li>Hyphen Command Center API v1.1.1+</li>
+<li>Hyphen Command Center (UI) v1.1.2+</li>
+</ul>
+<p>You can override env variable defaults if you include the following in the IP Camera &quot;Sensor&quot; metadata in Command Center:</p>
+<ul>
+<li>CAM_PASS=admin</li>
+<li>CAM_USER=mycamerapassword</li>
+<li>RTSP_PATH=/stream2 # the RTSP stream to pull</li>
+</ul>
+<h3 id="3-server-runtime-ffmpeg" class="tsd-anchor-link">3) Server Runtime: ffmpeg<a href="#3-server-runtime-ffmpeg" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>The server process that hosts this plugin must have ffmpeg installed and available on the PATH (or wrapped in your runtime container image).
+Quick install:</p>
+<h4 id="ubuntudebian" class="tsd-anchor-link">Ubuntu/Debian<a href="#ubuntudebian" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><pre><code class="bash"><span class="hl-4">sudo</span><span class="hl-0"> </span><span class="hl-5">apt-get</span><span class="hl-0"> </span><span class="hl-5">update</span><br/><span class="hl-4">sudo</span><span class="hl-0"> </span><span class="hl-5">apt-get</span><span class="hl-0"> </span><span class="hl-5">install</span><span class="hl-0"> </span><span class="hl-6">-y</span><span class="hl-0"> </span><span class="hl-5">ffmpeg</span>
+</code><button type="button">Copy</button></pre>
+
+<h4 id="fedora" class="tsd-anchor-link">Fedora<a href="#fedora" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><pre><code class="bash"><span class="hl-4">sudo</span><span class="hl-0"> </span><span class="hl-5">dnf</span><span class="hl-0"> </span><span class="hl-5">install</span><span class="hl-0"> </span><span class="hl-6">-y</span><span class="hl-0"> </span><span class="hl-5">ffmpeg</span>
+</code><button type="button">Copy</button></pre>
+
+<h4 id="macos-home" class="tsd-anchor-link">macOS (Home)<a href="#macos-home" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><pre><code class="bash"><span class="hl-4">brew</span><span class="hl-0"> </span><span class="hl-5">install</span><span class="hl-0"> </span><span class="hl-5">ffmpeg</span>
+</code><button type="button">Copy</button></pre>
+
+<h4 id="docker" class="tsd-anchor-link">Docker<a href="#docker" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h4><p>If you run Command Center in containers, ensure your image includes ffmpeg (for Debian-based images):</p>
+<pre><code class="dockerfile">RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+</code><button type="button">Copy</button></pre>
+
+<h3 id="4-optional-aws-sqs-downstream-notifications" class="tsd-anchor-link">4) Optional: AWS SQS (Downstream notifications)<a href="#4-optional-aws-sqs-downstream-notifications" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>If you want the gateway to emit snapshot events to SQS, you must configure AWS credentials + region and provide:
+• AWS_REGION
+• SQS_QUEUE_URL</p>
+<p>If these are not set, the SQS notifier remains disabled and the module still works normally.</p>
+<hr>
+<h2 id="quick-debugging-checklist" class="tsd-anchor-link">Quick Debugging Checklist<a href="#quick-debugging-checklist" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Before debugging code, verify these basics — <strong>90% of issues show up here</strong>.</p>
+<h3 id="device-hyphenos" class="tsd-anchor-link">Device (HyphenOS)<a href="#device-hyphenos" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>[ ] Device is running <strong>HyphenOS v1.0.19+</strong></li>
+<li>[ ] WiFi AP is visible (e.g. <code>HyphenCam-001</code>)</li>
+<li>[ ] Camera is connected to the device AP</li>
+<li>[ ] Camera responds from the device:
+<ul>
+<li>RTSP reachable at <code>rtsp://&lt;CAM_HOST&gt;:&lt;CAM_PORT&gt;&lt;RTSP_PATH&gt;</code></li>
+</ul>
+</li>
+<li>[ ] Device can resolve and reach the Command Center WSS host</li>
+<li>[ ] <code>HELLO</code> and <code>AUTH_OK</code> appear in Command Center logs</li>
+</ul>
+<h3 id="network" class="tsd-anchor-link">Network<a href="#network" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>[ ] <strong>WSS port is reachable</strong> from the device network</li>
+<li>[ ] No firewall blocking:
+<ul>
+<li>WebSocket port (<code>WS_PORT</code>)</li>
+<li>Local proxy port (<code>PROXY_PORT</code>) on the server</li>
+</ul>
+</li>
+<li>[ ] TLS certs are valid if <code>WS_TLS=1</code></li>
+</ul>
+<h3 id="command-center-api" class="tsd-anchor-link">Command Center API<a href="#command-center-api" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>[ ] Running <strong>Hyphen Command Center API v1.1.1+</strong></li>
+<li>[ ] Module <code>@similie/hyphen-rtsp-tunnel</code> is loaded at startup</li>
+<li>[ ] Redis is reachable (leader election + caching)</li>
+<li>[ ] Device identity exists and resolves correctly</li>
+</ul>
+<h3 id="ffmpeg" class="tsd-anchor-link">ffmpeg<a href="#ffmpeg" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>[ ] <code>ffmpeg</code> is installed and on <code>PATH</code></li>
+<li>[ ] Running <code>ffmpeg -version</code> works in the same environment</li>
+<li>[ ] <code>ffmpeg</code> can open the RTSP proxy URL:<pre><code class="bash"><span class="hl-4">ffmpeg</span><span class="hl-0"> </span><span class="hl-6">-rtsp_transport</span><span class="hl-0"> </span><span class="hl-5">tcp</span><span class="hl-0"> </span><span class="hl-6">-i</span><span class="hl-0"> </span><span class="hl-5">rtsp://127.0.0.1:8554/stream2</span><span class="hl-0"> </span><span class="hl-6">-frames:v</span><span class="hl-0"> </span><span class="hl-3">1</span><span class="hl-0"> </span><span class="hl-5">test.jpg</span>
+</code><button type="button">Copy</button></pre>
+
+</li>
+<li>No other capture is already in progress (single-capture lock)</li>
+</ul>
+<h3 id="storage-output" class="tsd-anchor-link">Storage / Output<a href="#storage-output" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>OUT_DIR exists and is writable</li>
+<li>Snapshot files appear on successful capture</li>
+<li>Downstream listeners (SQS, workers, etc.) are optional and non-blocking</li>
+</ul>
+<h2 id="usage-command-center-plugin" class="tsd-anchor-link">Usage: Command Center Plugin<a href="#usage-command-center-plugin" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><pre><code class="bash"><span class="hl-7"># .env</span><br/><span class="hl-2">HYPHEN_MODULES</span><span class="hl-0">=</span><span class="hl-5">@similie/hyphen-rtsp-tunnel-module</span><span class="hl-0"> </span><span class="hl-7"># comma-separated for additional modules</span>
+</code><button type="button">Copy</button></pre>
+
+<h2 id="environment-variables" class="tsd-anchor-link">Environment Variables<a href="#environment-variables" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>The gateway is fully configured via environment variables.</p>
+<h2 id="environment-variables-1" class="tsd-anchor-link">Environment Variables<a href="#environment-variables-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>All configuration for <code>@similie/hyphen-rtsp-tunnel</code> is provided via environment variables.</p>
+<h3 id="gateway-networking" class="tsd-anchor-link">Gateway &amp; Networking<a href="#gateway-networking" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WS_PORT</code></td>
+<td><code>7443</code></td>
+<td>Port for the WebSocket gateway</td>
+</tr>
+<tr>
+<td><code>WS_TLS</code></td>
+<td><code>0</code></td>
+<td>Enable TLS for WebSocket server (<code>1</code> = HTTPS/WSS)</td>
+</tr>
+<tr>
+<td><code>TLS_CERT</code></td>
+<td>—</td>
+<td>Path to TLS certificate (required if <code>WS_TLS=1</code>)</td>
+</tr>
+<tr>
+<td><code>TLS_KEY</code></td>
+<td>—</td>
+<td>Path to TLS private key (required if <code>WS_TLS=1</code>)</td>
+</tr>
+<tr>
+<td><code>PROXY_PORT</code></td>
+<td><code>8554</code></td>
+<td>Local TCP proxy port used by FFmpeg</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="rtsp-camera" class="tsd-anchor-link">RTSP / Camera<a href="#rtsp-camera" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CAM_USER</code></td>
+<td><code>admin</code></td>
+<td>RTSP camera username</td>
+</tr>
+<tr>
+<td><code>CAM_PASS</code></td>
+<td>—</td>
+<td>RTSP camera password</td>
+</tr>
+<tr>
+<td><code>RTSP_PATH</code></td>
+<td><code>/stream2</code></td>
+<td>RTSP stream path</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Note:</strong><br>
+The camera <strong>host and port are NOT configured server-side</strong>.<br>
+The ESP32 device determines the camera endpoint via its own build flags.</p>
+</blockquote>
+<hr>
+<h3 id="capture-behavior" class="tsd-anchor-link">Capture Behavior<a href="#capture-behavior" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AUTO_CAPTURE</code></td>
+<td><code>1</code></td>
+<td>Automatically capture on device connection</td>
+</tr>
+<tr>
+<td><code>CAPTURE_TIMEOUT_MS</code></td>
+<td><code>45000</code></td>
+<td>Maximum capture duration before abort</td>
+</tr>
+<tr>
+<td><code>HELLO_WAIT_MS</code></td>
+<td><code>2000</code></td>
+<td>Time to wait for HELLO before closing socket</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="authentication" class="tsd-anchor-link">Authentication<a href="#authentication" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>REQUIRE_AUTH</code></td>
+<td><code>1</code></td>
+<td>Require AUTH handshake before capture</td>
+</tr>
+</tbody>
+</table>
+<p>Authentication is currently based on Command Center/Device Certificate Signatures.</p>
+<hr>
+<h3 id="storage" class="tsd-anchor-link">Storage<a href="#storage" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>OUT_DIR</code></td>
+<td>OS temp directory</td>
+<td>Local directory for snapshot storage</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="aws-sqs-optional" class="tsd-anchor-link">AWS / SQS (Optional)<a href="#aws-sqs-optional" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>These are only required if using the SQS notifier.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AWS_REGION</code></td>
+<td>AWS region</td>
+</tr>
+<tr>
+<td><code>SQS_QUEUE_URL</code></td>
+<td>SQS queue URL (FIFO supported)</td>
+</tr>
+</tbody>
+</table>
+<p>If these variables are not present, the notifier is automatically disabled.</p>
+<hr>
+<h2 id="device-handshake-flow" class="tsd-anchor-link">Device Handshake Flow<a href="#device-handshake-flow" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><pre><code><span class="hl-2">Server</span><span class="hl-0"> → </span><span class="hl-1">READY</span><br/><span class="hl-2">Device</span><span class="hl-0"> → </span><span class="hl-1">HELLO</span><span class="hl-0"> [</span><span class="hl-2">payloadId</span><span class="hl-0">] </span><span class="hl-2">deviceId</span><br/><span class="hl-2">Server</span><span class="hl-0"> → </span><span class="hl-1">CHAL</span><br/><span class="hl-2">Device</span><span class="hl-0"> → </span><span class="hl-1">AUTH</span><span class="hl-0"> </span><span class="hl-2">deviceId</span><br/><span class="hl-2">Server</span><span class="hl-0"> → </span><span class="hl-1">AUTH_OK</span><br/><span class="hl-2">Server</span><span class="hl-0"> → </span><span class="hl-1">OPEN</span>
+</code><button>Copy</button></pre>
+
+<hr>
+<h2 id="events-emitted" class="tsd-anchor-link">Events Emitted<a href="#events-emitted" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>The RTSP tunnel gateway exposes an internal event emitter so that <strong>capture, storage, and downstream processing can be fully decoupled</strong>.</p>
+<h3 id="" class="tsd-anchor-link"><code>snapshot:captured</code></h3><p>Emitted when a snapshot is successfully captured and written to local temporary storage.</p>
+<pre><code class="ts"><span class="hl-0">{</span><br/><span class="hl-0">  </span><span class="hl-8">sessionId</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0">;</span><br/><span class="hl-0">  </span><span class="hl-8">deviceId</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0">;</span><br/><span class="hl-0">  </span><span class="hl-8">payloadId</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0"> | </span><span class="hl-6">null</span><span class="hl-0">;</span><br/><span class="hl-0">  </span><span class="hl-8">localPath</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0">;</span><br/><span class="hl-0">  </span><span class="hl-8">capturedAt</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0">;</span><br/><span class="hl-0">}</span>
+</code><button type="button">Copy</button></pre>
+
+<p>Typical consumers of this event include:</p>
+<ul>
+<li>Storage adapters (S3, NFS, local disk)</li>
+<li>Queue notifiers (SQS, BullMQ, Redis)</li>
+<li>Video stitching pipelines</li>
+<li>AI / image-processing workers (e.g. 4Shadow)</li>
+</ul>
+<h3 id="-1" class="tsd-anchor-link"><code>snapshot:failed</code><a href="#-1" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>Emitted whenever a snapshot attempt fails at any stage.</p>
+<pre><code class="ts"><span class="hl-0">{</span><br/><span class="hl-0">  </span><span class="hl-8">stage</span><span class="hl-0">: </span><span class="hl-5">&quot;auth&quot;</span><span class="hl-0"> | </span><span class="hl-5">&quot;capture&quot;</span><span class="hl-0"> | </span><span class="hl-5">&quot;timeout&quot;</span><span class="hl-0"> | </span><span class="hl-5">&quot;ffmpeg&quot;</span><span class="hl-0">;</span><br/><span class="hl-0">  </span><span class="hl-8">error</span><span class="hl-0">: </span><span class="hl-2">string</span><span class="hl-0">;</span><br/><span class="hl-0">}</span>
+</code><button type="button">Copy</button></pre>
+
+<p>This allows downstream systems to log, alert, retry, or back off without blocking the gateway.</p>
+<hr>
+<h2 id="storage-responsibility-intentional-design" class="tsd-anchor-link">Storage Responsibility (Intentional Design)<a href="#storage-responsibility-intentional-design" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>We have stubbed out this plugin to work well for our workflows, but out of the box you may need to implement logic to
+support your own workflows</p>
+<p>This module does not:</p>
+<ul>
+<li>Upload images to S3 (without configuration)</li>
+<li>Push messages to SQS or Redis (without configuration)</li>
+<li>Persist database records</li>
+<li>Perform AI or video processing</li>
+</ul>
+<p>The gateway’s responsibility ends at secure capture and local persistence.</p>
+<p>This keeps the system:</p>
+<ul>
+<li>Non-blocking</li>
+<li>Fault tolerant</li>
+<li>Horizontally scalable</li>
+<li>Easy to extend with new pipelines</li>
+</ul>
+<p>All heavy or slow work is expected to run in downstream workers.</p>
+<hr>
+<h2 id="scaling-high-availability" class="tsd-anchor-link">Scaling &amp; High Availability<a href="#scaling-high-availability" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>The RTSP tunnel is designed to operate in clustered environments:</p>
+<ul>
+<li>Uses leader election so only one instance captures</li>
+<li>Other nodes remain idle and ready for failover</li>
+<li>Safe to run behind load balancers</li>
+<li>Compatible with Redis-backed horizontal scaling</li>
+</ul>
+<p>This avoids duplicate captures while preserving resilience.</p>
+<hr>
+<h2 id="security-model" class="tsd-anchor-link">Security Model<a href="#security-model" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>Security is enforced through layered constraints:</p>
+<ul>
+<li>TLS-secured WebSocket transport</li>
+<li>Device-initiated outbound connections only</li>
+<li>Optional cryptographic authentication (nonce + signature)</li>
+<li>No inbound RTSP exposure</li>
+<li>Camera network remains isolated behind the device</li>
+</ul>
+<p>This design minimizes attack surface and removes the need to expose cameras directly to the internet.</p>
+<hr>
+<h3 id="who-this-is-for" class="tsd-anchor-link">Who This Is For<a href="#who-this-is-for" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><ul>
+<li>Environmental sensing networks</li>
+<li>Flood and climate early-warning systems</li>
+<li>Research deployments using consumer-grade cameras</li>
+<li>Edge-to-cloud ingestion pipelines</li>
+<li>Teams who need secure camera access without RTSP exposure</li>
+</ul>
+<hr>
+<h2 id="philosophy" class="tsd-anchor-link">Philosophy<a href="#philosophy" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h2><p>At Similie, we believe that low-cost, open technology can deliver research-grade impact.</p>
+<p>This module is part of a broader effort to make climate monitoring, early warning, and environmental intelligence:</p>
+<ul>
+<li>Accessible</li>
+<li>Affordable</li>
+<li>Open</li>
+<li>Locally deployable</li>
+<li>Globally scalable</li>
+</ul>
+<hr>
+<h3 id="license" class="tsd-anchor-link">License<a href="#license" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><p>MIT © Similie</p>
+<h3 id="hyphen-ecosystem" class="tsd-anchor-link">Hyphen Ecosystem<a href="#hyphen-ecosystem" aria-label="Permalink" class="tsd-anchor-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="assets/icons.svg#icon-anchor"></use></svg></a></h3><table>
+<thead>
+<tr>
+<th>Project</th>
+<th>Description</th>
+<th>Repository</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HyphenOS</strong></td>
+<td>The device runtime environment for ultra-reliable IoT deployments. Includes OTA, telemetry queues, watchdogs, and sensor drivers.</td>
+<td><a href="https://github.com/similie/hyphen-os">https://github.com/similie/hyphen-os</a></td>
+</tr>
+<tr>
+<td><strong>HyphenConnect</strong></td>
+<td>Network + MQTT abstraction layer for ESP32 / Cellular devices. Enables function calls, variable access, and secure OTA.</td>
+<td><a href="https://github.com/similie/hyphen-connect">https://github.com/similie/hyphen-connect</a></td>
+</tr>
+<tr>
+<td><strong>Hyphen Command Center</strong></td>
+<td>SvelteKit UI for managing your global device fleet, OTA updates, telemetry, and configuration.</td>
+<td><a href="https://github.com/similie/hyphen-command-center">https://github.com/similie/hyphen-command-center</a></td>
+</tr>
+<tr>
+<td><strong>Hyphen Elemental</strong></td>
+<td>The hardware schematics Similie uses to for our Hyphen Elemental 4 line of Products.</td>
+<td><a href="https://github.com/similie/hyphen-elemental">https://github.com/similie/hyphen-elemental</a></td>
+</tr>
+<tr>
+<td><strong>Hyphen Video Encode</strong></td>
+<td>A video stream processor for the RTSP Camera Workflow. Turn snaps into daily images.</td>
+<td><a href="https://github.com/similie/hyphen-videoencoder">https://github.com/similie/hyphen-videoencoder</a></td>
+</tr>
+<tr>
+<td><strong>Ellipsies</strong></td>
+<td>Workflow + routing engine powering the API: device identity, build pipeline, users, orgs, storage, and message routing.</td>
+<td><a href="https://github.com/similie/ellipsies">https://github.com/similie/ellipsies</a></td>
+</tr>
+</tbody>
+</table>
+</div></div><div class="col-sidebar"><div class="page-menu"><div class="tsd-navigation settings"><details class="tsd-accordion"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>Settings</h3></summary><div class="tsd-accordion-details"><div class="tsd-filter-visibility"><span class="settings-label">Member Visibility</span><ul id="tsd-filter-options"><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-protected" name="protected"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Protected</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-inherited" name="inherited" checked/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>Inherited</span></label></li><li class="tsd-filter-item"><label class="tsd-filter-input"><input type="checkbox" id="tsd-filter-external" name="external"/><svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><rect class="tsd-checkbox-background" width="30" height="30" x="1" y="1" rx="6" fill="none"></rect><path class="tsd-checkbox-checkmark" d="M8.35422 16.8214L13.2143 21.75L24.6458 10.25" stroke="none" stroke-width="3.5" stroke-linejoin="round" fill="none"></path></svg><span>External</span></label></li></ul></div><div class="tsd-theme-toggle"><label class="settings-label" for="tsd-theme">Theme</label><select id="tsd-theme"><option value="os">OS</option><option value="light">Light</option><option value="dark">Dark</option></select></div></div></details></div><details open class="tsd-accordion tsd-page-navigation"><summary class="tsd-accordion-summary"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><use href="assets/icons.svg#icon-chevronDown"></use></svg><h3>On This Page</h3></summary><div class="tsd-accordion-details"><a href="#similiehyphen-rtsp-tunnel"><span>@similie/hyphen-<wbr/>rtsp-<wbr/>tunnel</span></a><ul><li><a href="#why-this-exists"><span>Why this exists</span></a></li><li><a href="#what-this-module-does"><span>What this module does</span></a></li><li><a href="#high-level-architecture"><span>High-<wbr/>level architecture</span></a></li><li><a href="#key-design-principles"><span>Key design principles</span></a></li><li><ul><li><a href="#🔐-secure-by-default"><span>🔐 <wbr/>Secure by default</span></a></li><li><a href="#🌍-designed-for-constrained-environments"><span>🌍 <wbr/>Designed for constrained environments</span></a></li><li><a href="#⚖️-horizontally-scalable"><span>⚖️ <wbr/>Horizontally scalable</span></a></li><li><a href="#🧩-modular-extensible"><span>🧩 <wbr/>Modular &amp; extensible</span></a></li></ul></li><li><a href="#installation"><span>Installation</span></a></li><li><a href="#requirements"><span>Requirements</span></a></li><li><ul><li><a href="#1-device-firmware-hyphenos"><span>1) <wbr/>Device <wbr/>Firmware (<wbr/>Hyphen<wbr/>OS)</span></a></li><li><a href="#2-hyphen-command-center-versions"><span>2) <wbr/>Hyphen <wbr/>Command <wbr/>Center <wbr/>Versions</span></a></li><li><a href="#3-server-runtime-ffmpeg"><span>3) <wbr/>Server <wbr/>Runtime: ffmpeg</span></a></li><li><ul><li><a href="#ubuntudebian"><span>Ubuntu/<wbr/>Debian</span></a></li><li><a href="#fedora"><span>Fedora</span></a></li><li><a href="#macos-home"><span>mac<wbr/>OS (<wbr/>Home)</span></a></li><li><a href="#docker"><span>Docker</span></a></li></ul></li><li><a href="#4-optional-aws-sqs-downstream-notifications"><span>4) <wbr/>Optional: <wbr/>AWS <wbr/>SQS (<wbr/>Downstream notifications)</span></a></li></ul></li><li><a href="#quick-debugging-checklist"><span>Quick <wbr/>Debugging <wbr/>Checklist</span></a></li><li><ul><li><a href="#device-hyphenos"><span>Device (<wbr/>Hyphen<wbr/>OS)</span></a></li><li><a href="#network"><span>Network</span></a></li><li><a href="#command-center-api"><span>Command <wbr/>Center <wbr/>API</span></a></li><li><a href="#ffmpeg"><span>ffmpeg</span></a></li><li><a href="#storage-output"><span>Storage / <wbr/>Output</span></a></li></ul></li><li><a href="#usage-command-center-plugin"><span>Usage: <wbr/>Command <wbr/>Center <wbr/>Plugin</span></a></li><li><a href="#environment-variables"><span>Environment <wbr/>Variables</span></a></li><li><a href="#environment-variables-1"><span>Environment <wbr/>Variables</span></a></li><li><ul><li><a href="#gateway-networking"><span>Gateway &amp; <wbr/>Networking</span></a></li><li><a href="#rtsp-camera"><span>RTSP / <wbr/>Camera</span></a></li><li><a href="#capture-behavior"><span>Capture <wbr/>Behavior</span></a></li><li><a href="#authentication"><span>Authentication</span></a></li><li><a href="#storage"><span>Storage</span></a></li><li><a href="#aws-sqs-optional"><span>AWS / <wbr/>SQS (<wbr/>Optional)</span></a></li></ul></li><li><a href="#device-handshake-flow"><span>Device <wbr/>Handshake <wbr/>Flow</span></a></li><li><a href="#events-emitted"><span>Events <wbr/>Emitted</span></a></li><li><ul><li><a href="#"><span></span></a></li><li><a href="#-1"><span></span></a></li></ul></li><li><a href="#storage-responsibility-intentional-design"><span>Storage <wbr/>Responsibility (<wbr/>Intentional <wbr/>Design)</span></a></li><li><a href="#scaling-high-availability"><span>Scaling &amp; <wbr/>High <wbr/>Availability</span></a></li><li><a href="#security-model"><span>Security <wbr/>Model</span></a></li><li><ul><li><a href="#who-this-is-for"><span>Who <wbr/>This <wbr/>Is <wbr/>For</span></a></li></ul></li><li><a href="#philosophy"><span>Philosophy</span></a></li><li><ul><li><a href="#license"><span>License</span></a></li><li><a href="#hyphen-ecosystem"><span>Hyphen <wbr/>Ecosystem</span></a></li></ul></li></ul></div></details></div><div class="site-menu"><nav class="tsd-navigation"><a href="modules.html">@similie/hyphen-rtsp-tunnel</a><ul class="tsd-small-nested-navigation" id="tsd-nav-container"><li>Loading...</li></ul></nav></div></div></div><footer><p class="tsd-generator">Generated using <a href="https://typedoc.org/" target="_blank">TypeDoc</a></p></footer><div class="overlay"></div></body></html>
