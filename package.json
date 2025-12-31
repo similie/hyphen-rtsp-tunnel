@@ -2,7 +2,7 @@
   "name": "@similie/hyphen-rtsp-tunnel",
   "version": "1.0.0",
   "description": "API module for Hyphen Command Center. Provides REST and WebSocket interfaces for managing RTSP streams and related services.",
-  "license": "GPL-3.0-only",
+  "license": "MIT",
   "author": "adam.smith@similie.org",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,6 +12,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -25,7 +28,6 @@
     "@aws-sdk/client-sqs": "^3.958.0",
     "@similie/ellipsies": "^1.0.16",
     "@similie/hyphen-command-server-types": "^1.0.6",
-    "aws-sdk": "^2.1692.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
