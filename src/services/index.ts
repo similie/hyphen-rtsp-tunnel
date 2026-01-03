@@ -6,3 +6,4 @@ export * from "./storage-worker.js";
 export * from "./sqs-notifier.js";
 export * from "./notifier.js";
 export * from "./device-auth.js";
+export * from "./config.js";

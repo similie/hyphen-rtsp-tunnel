@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/client-sqs";
 import type { ModuleContext } from "@similie/hyphen-command-server-types";
 import type { Notifier, NotifierEventMap } from "./notifier.js";
+import { envTrim } from "./config.js";
 
 type AnyEvent = NotifierEventMap[keyof NotifierEventMap];
 
@@ -27,7 +28,8 @@ export class SqsNotifier implements Notifier {
 
   constructor() {
     const queueUrl = process.env.SQS_QUEUE_URL?.trim();
-    const region = process.env.AWS_REGION?.trim() ?? "ap-southeast-1";
+    const region =
+      envTrim("AWS_SQS_REGION") ?? envTrim("AWS_REGION") ?? "ap-southeast-1";
 
     if (!queueUrl) {
       this.enabled = false;

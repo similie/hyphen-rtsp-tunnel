@@ -3,10 +3,7 @@ import type { StorageAdapter, StoreInput, StoreResult } from "./storage.js";
 import fs from "node:fs";
 import path from "node:path";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
-function safeSegment(s: string) {
-  return (s || "unknown").replace(/[^a-zA-Z0-9._/-]/g, "_").slice(0, 128);
-}
+import { envTrim, safeSegment } from "./config.js";
 
 export class S3StorageAdapter implements StorageAdapter {
   name = "s3";
@@ -18,7 +15,11 @@ export class S3StorageAdapter implements StorageAdapter {
     s3Client?: S3Client,
     private readonly deleteOnMove: boolean = true,
   ) {
-    this.s3 = s3Client ?? new S3Client({});
+    // Prefer service-specific region, then generic, then default.
+    const region =
+      envTrim("AWS_S3_REGION") ?? envTrim("AWS_REGION") ?? "ap-southeast-1";
+
+    this.s3 = s3Client ?? new S3Client({ region });
     if (!bucket) throw new Error("S3StorageAdapter requires bucket");
   }
 

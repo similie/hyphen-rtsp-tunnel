@@ -345,10 +345,12 @@ Authentication is currently based on Command Center/Device Certificate Signature
 
 These are only required if using the SQS notifier.
 
-| Variable        | Description                    |
-| --------------- | ------------------------------ |
-| `AWS_REGION`    | AWS region                     |
-| `SQS_QUEUE_URL` | SQS queue URL (FIFO supported) |
+| Variable         | Description                     |
+| ---------------- | ------------------------------- |
+| `AWS_REGION`     | AWS region                      |
+| `SQS_QUEUE_URL`  | SQS queue URL (FIFO supported)  |
+| `AWS_SQS_REGION` | If AWS_REGION is different(SQS) |
+| `AWS_S3_REGION`  | If AWS_REGION is different(s3)  |
 
 If these variables are not present, the notifier is automatically disabled.
 

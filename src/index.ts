@@ -12,8 +12,7 @@ import {
 function buildNotifierFromEnv(): Notifier {
   // Not implementing SQS yet — just leaving the slot.
   // Example rule later:
-  if (process.env.SQS_QUEUE_URL && process.env.AWS_REGION)
-    return new SqsNotifier();
+  if (process.env.SQS_QUEUE_URL) return new SqsNotifier();
 
   return new NoopNotifier();
 }
