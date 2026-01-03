@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file. See [standa
 
 ### [1.1.1](https://github.com/similie/hyphen-rtsp-tunnel/compare/v1.1.0...v1.1.1) (2026-01-03)
 
+### [1.1.1](https://github.com/similie/hyphen-rtsp-tunnel/compare/v1.1.0...v1.1.1) (2026-01-03)
+
 ## 1.1.0 (2025-12-31)
 
 
