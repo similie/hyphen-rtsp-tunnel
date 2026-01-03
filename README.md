@@ -48,35 +48,35 @@ Design constraints:
 ## High-level architecture
 
 ```
-┌─────────────┐
-│ IP Camera   │
-│ (RTSP)      │
-└─────┬───────┘
-│ 192.168.4.x (private AP)
-┌─────▼───────┐
-│ HyphenOS.   |
-| Enabled     │
-│ Device      │
-│ (ESP32)     │
-│             │
-│ RTSP ↔ WSS  │
-└─────┬───────┘
-│ Secure WebSocket
-▼
-┌───────────────────────┐
-│ Command Center API    │
-│                       │
-│  RTSP Tunnel Gateway  │
-│   - ffmpeg snapshot   │
-│   - auth handshake    │
-│   - leader-aware      │
-└─────────┬─────────────┘
-│ events
-▼
-┌────────────────────────────┐
-│ Storage / Queue / AI       │
-│ (pluggable, async)         │
-└────────────────────────────┘
+            ┌─────────────┐
+            │ IP Camera   │
+            │ (RTSP)      │
+            └─────┬───────┘
+                  │ 192.168.4.x (private AP)
+            ┌─────▼───────┐
+            │ HyphenOS.   |
+            | Enabled     │
+            │ Device      │
+            │ (ESP32)     │
+            │             │
+            │ RTSP ↔ WSS  │
+            └─────┬───────┘
+                  │ Secure WebSocket
+                  ▼
+        ┌───────────────────────┐
+        │ Command Center API    │
+        │                       │
+        │  RTSP Tunnel Gateway  │
+        │   - ffmpeg snapshot   │
+        │   - auth handshake    │
+        │   - leader-aware      │
+        └─────────┬─────────────┘
+                  │ events
+                  ▼
+        ┌────────────────────────────┐
+        │ Storage / Queue / AI       │
+        │ (pluggable, async)         │
+        └────────────────────────────┘
 ```
 
 ---
@@ -134,10 +134,10 @@ At minimum, your firmware build must include these `build_flags` (example shown 
 ; --- Enable WiFi AP mode (camera LAN) ---
 -D HYPHEN_WIFI_AP_ENABLE=1
 -D HYPHEN_WIFI_AP_SSID=\"HyphenCam-001\"
--D HYPHEN_WIFI_AP_PASS=\"hyphen1234\"
+-D HYPHEN_WIFI_AP_PASS=\"hyphen1234\" ; make sure you set a real password
 -D HYPHEN_WIFI_AP_CHANNEL=6
 -D HYPHEN_WIFI_AP_MAX_CLIENTS=4
--D HYPHEN_HIDE_WIFI_AP=0
+-D HYPHEN_HIDE_WIFI_AP=0 ; 0 or 1 for "hidden"
 ; --- Camera endpoint on AP LAN ---
 -D HYPHEN_CAM_HOST=\"192.168.4.216\"
 -D HYPHEN_CAM_PORT=554
@@ -276,6 +276,8 @@ Before debugging code, verify these basics — **90% of issues show up here**.
 # .env
 HYPHEN_MODULES=@similie/hyphen-rtsp-tunnel-module # comma-separated for additional modules
 ```
+
+**_Note:_** the docker version of Command Center API has the plugin installed, but will need to be activated by the `HYPHEN_MODULES` variable
 
 ## Environment Variables
 
@@ -495,3 +497,7 @@ MIT © Similie
 | **Hyphen Elemental**      | The hardware schematics Similie uses to for our Hyphen Elemental 4 line of Products.                                              | https://github.com/similie/hyphen-elemental      |
 | **Hyphen Video Encode**   | A video stream processor for the RTSP Camera Workflow. Turn snaps into daily images.                                              | https://github.com/similie/hyphen-videoencoder   |
 | **Ellipsies**             | Workflow + routing engine powering the API: device identity, build pipeline, users, orgs, storage, and message routing.           | https://github.com/similie/ellipsies             |
+
+### About Similie
+
+[Similie](https://similie.com) is a technology company based out of Timor-Leste, dedicated to developing innovative solutions that support international development initiatives and climate-change adaption. Our mission is to harness the power of technology to drive positive change and improve lives around the world. With a focus on sustainability, community engagement, and social impact, we strive to create products and services that make a real difference in people's lives.

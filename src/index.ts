@@ -42,7 +42,7 @@ const moduleImpl: HyphenModule = {
     // event -> notifier (does nothing if NoopNotifier)
     gateway.events.on("snapshot:stored", async (e) => {
       try {
-        ctx.log("[rtsp-tunnel] snapshot stored event", { event: e });
+        // ctx.log("[rtsp-tunnel] snapshot stored event", { event: e });
         await notifier.send("snapshot:stored", e);
       } catch (err: any) {
         ctx.log("[rtsp-tunnel] notifier error (stored)", err);

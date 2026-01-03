@@ -29,14 +29,12 @@ export class S3StorageAdapter implements StorageAdapter {
     const keyParts = [
       safeSegment(this.prefix),
       safeSegment(input.deviceId),
-      input.payloadId ? safeSegment(input.payloadId) : null,
-      //   safeSegment(input.capturedAt.replace(/[:.]/g, "-")),
       day,
       fileName,
     ].filter(Boolean);
 
     const key = keyParts.join("/");
-
+    console.log("Uploading to S3 with key:", key);
     const body = fs.createReadStream(input.localPath);
 
     await this.s3.send(

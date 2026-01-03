@@ -66,7 +66,7 @@ export class SqsNotifier implements Notifier {
     eventName: K,
     payload: NotifierEventMap[K],
   ): Promise<void> {
-    this.ctx?.log("[rtsp-tunnel][sqs] send called", { eventName, payload });
+    // this.ctx?.log("[rtsp-tunnel][sqs] send called", { eventName, payload });
     if (!this.enabled || !this.sqs || !this.queueUrl) return;
 
     // Build a consistent message envelope

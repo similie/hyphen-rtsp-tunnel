@@ -330,7 +330,7 @@ export class RtspTunnelGateway {
         [
           "-hide_banner",
           "-loglevel",
-          "info",
+          "error",
           "-rtsp_transport",
           "tcp",
           "-i",
