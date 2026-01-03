@@ -27,9 +27,9 @@ export class SqsNotifier implements Notifier {
 
   constructor() {
     const queueUrl = process.env.SQS_QUEUE_URL?.trim();
-    const region = process.env.AWS_REGION?.trim();
+    const region = process.env.AWS_REGION?.trim() ?? "ap-southeast-1";
 
-    if (!queueUrl || !region) {
+    if (!queueUrl) {
       this.enabled = false;
       return;
     }
