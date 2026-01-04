@@ -22,7 +22,7 @@ export type SnapshotFailedEvent = {
   deviceId: string;
   payloadId: string | null;
   remote: string;
-  stage: "hello" | "auth" | "capture" | "proxy" | "unknown" | "store";
+  stage: "hello" | "auth" | "capture" | "proxy" | "unknown" | "store" | "queue";
   error: string;
 };
 

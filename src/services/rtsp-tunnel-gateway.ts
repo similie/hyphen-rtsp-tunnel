@@ -1,3 +1,15 @@
+// rtsp-tunnel-gateway.ts (Phase 1: queued, single-proxy, single-capture at a time)
+// Notes:
+// - Keeps your single local TCP proxy (PROXY_PORT) and still only runs 1 ffmpeg capture at a time
+// - Adds a FIFO capture queue so multiple device sessions won't get "booted" just because a capture is in progress
+// - De-dupes queue per deviceId (1 pending per device by default)
+// - Cleans up queue entries when sessions close
+//
+// Env knobs (optional):
+//   CAPTURE_QUEUE_MAX=200        # hard cap; oldest/newest handling is "reject new"
+//   CAPTURE_QUEUE_PER_DEVICE=1   # max pending per device (default 1)
+//   CAPTURE_QUEUE_LOG_EVERY=10   # log queue stats every N enqueues (default 10)
+
 import fs from "node:fs";
 import http from "node:http";
 import https from "node:https";
@@ -9,11 +21,13 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { WebSocketServer, WebSocket } from "ws";
 import { RtspTunnelEvents } from "./events.js";
 import { DeviceAuth } from "./device-auth.js";
+
 import {
   type ModuleContext,
   RedisCache,
 } from "@similie/hyphen-command-server-types";
 import { sanitizeTzOffsetHours } from "./day.js";
+
 type Session = {
   id: string;
   ws: WebSocket;
@@ -22,6 +36,7 @@ type Session = {
   deviceId: string;
   helloAt: number | null;
   payloadId: string | null;
+
   // auth handshake
   nonceB64: string | null;
   authed: boolean;
@@ -31,9 +46,14 @@ type Session = {
   proxySock: net.Socket | null;
   ffmpeg: ChildProcess | null;
   tzOffsetHours: number | null;
+
   helloTimer: NodeJS.Timeout | null;
   closed: boolean;
+
   cleanup: (why: string) => void;
+
+  // queue bookkeeping
+  queued: boolean;
 };
 
 export type RtspTunnelTunnelParams = {
@@ -42,9 +62,17 @@ export type RtspTunnelTunnelParams = {
   rtspPath: string;
 };
 
+type QueueItem = {
+  sid: string;
+  deviceId: string;
+  enqueuedAt: number;
+  reason: "auto";
+};
+
 export class RtspTunnelGateway {
   private readonly ctx: ModuleContext;
   public readonly events = new RtspTunnelEvents();
+
   // ---- config (env-driven, generic) ----
   private readonly wsPort = Number(process.env.WS_PORT ?? "7443");
   private readonly proxyPort = Number(process.env.PROXY_PORT ?? "8554");
@@ -69,15 +97,32 @@ export class RtspTunnelGateway {
     process.env.CAPTURE_TIMEOUT_MS ?? "45000",
   );
 
+  // Queue controls
+  private readonly queueMax = Number(process.env.CAPTURE_QUEUE_MAX ?? "200");
+  private readonly queuePerDevice = Number(
+    process.env.CAPTURE_QUEUE_PER_DEVICE ?? "1",
+  );
+  private readonly queueLogEvery = Number(
+    process.env.CAPTURE_QUEUE_LOG_EVERY ?? "10",
+  );
+
   // ---- runtime ----
   private server: http.Server | https.Server | null = null;
   private wss: WebSocketServer | null = null;
   private proxyServer: net.Server | null = null;
   private auth: DeviceAuth;
+
   private sessions = new Map<string, Session>();
-  //   private sensors = new Map<string, any>();
+
+  // Single active capture pairing for the single TCP proxy server
   private globalCaptureInFlight = false;
   private globalCaptureSessionId: string | null = null;
+
+  // Queue state
+  private captureQueue: QueueItem[] = [];
+  private queuedCountByDevice = new Map<string, number>();
+  private draining = false;
+  private enqueueCount = 0;
 
   private started = false;
 
@@ -97,9 +142,8 @@ export class RtspTunnelGateway {
   private async pullDevice(identity: string) {
     const key = this.deviceIdKey(identity);
     const stored = await RedisCache.get<any>(key);
-    if (stored) {
-      return stored;
-    }
+    if (stored) return stored;
+
     const device = await this.auth.device(identity);
     await RedisCache.set(key, device);
     return device || {};
@@ -116,13 +160,11 @@ export class RtspTunnelGateway {
   async pullDeviceSensorMeta(identity: string) {
     const key = this.deviceSensorsKey(identity);
     const stored = await RedisCache.get<any>(key);
-    if (stored) {
-      return stored;
-    }
+    if (stored) return stored;
+
     const { values } = await this.auth.deviceSensors(identity);
     await RedisCache.set(key, values);
     return values;
-    //
   }
 
   async start() {
@@ -146,7 +188,7 @@ export class RtspTunnelGateway {
       this.server!.listen(this.wsPort, "0.0.0.0", () => resolve());
     });
 
-    // Local TCP proxy
+    // Local TCP proxy (single port) for ffmpeg
     this.proxyServer = net.createServer((sock) => this.onProxyConnection(sock));
     await new Promise<void>((resolve) => {
       this.proxyServer!.listen(this.proxyPort, "127.0.0.1", () => resolve());
@@ -155,13 +197,20 @@ export class RtspTunnelGateway {
     this.ctx.log(
       `[rtsp-tunnel] gateway started wsPort=${this.wsPort} tls=${
         this.wsTls ? "on" : "off"
-      } proxyPort=${this.proxyPort}`,
+      } proxyPort=${this.proxyPort} queueMax=${this.queueMax} queuePerDevice=${
+        this.queuePerDevice
+      }`,
     );
   }
 
   async stop() {
     if (!this.started) return;
     this.started = false;
+
+    // Stop queue
+    this.captureQueue = [];
+    this.queuedCountByDevice.clear();
+    this.draining = false;
 
     // Clean sessions
     for (const s of this.sessions.values()) {
@@ -229,7 +278,6 @@ export class RtspTunnelGateway {
   }
 
   private sendOpen(ws: WebSocket) {
-    // OPEN signal only; device uses build-flag camera host/port.
     try {
       ws.send(Buffer.from([3]));
     } catch {}
@@ -251,8 +299,6 @@ export class RtspTunnelGateway {
     return crypto.randomBytes(24).toString("base64");
   }
 
-  // ---- AUTH HOOK (stub) ----
-  // Later: use ctx + ellipsies/models to load public key by deviceId and verify signature.
   private async verifyAuth(
     deviceId: string,
     nonceB64: string,
@@ -263,15 +309,12 @@ export class RtspTunnelGateway {
 
   private async pullCameraProfile(identity: string): Promise<any> {
     const sensorMeta = (await this.pullDeviceSensorMeta(identity)) || {};
-    if (!sensorMeta || !Object.keys(sensorMeta).length) {
-      return null;
-    }
+    if (!sensorMeta || !Object.keys(sensorMeta).length) return null;
 
     for (const s in sensorMeta) {
       const meta = sensorMeta[s]?.meta || {};
-      if (!meta) {
-        continue;
-      }
+      if (!meta) continue;
+
       const keys = Object.keys(meta);
       if (
         keys.includes("RTSP_PATH") ||
@@ -289,20 +332,204 @@ export class RtspTunnelGateway {
     identity: string,
   ): Promise<RtspTunnelTunnelParams> {
     const cmProfile = await this.pullCameraProfile(identity);
-    // console.log("[rtsp-tunnel] buildTunnelParams cmProfile=", { cmProfile });
     const defProfile = {
-      camUser: cmProfile.CAM_USER || this.camUser,
-      camPass: cmProfile.CAM_PASS || this.camPass,
-      rtspPath: cmProfile.RTSP_PATH || this.rtspPath,
+      camUser: cmProfile?.CAM_USER || this.camUser,
+      camPass: cmProfile?.CAM_PASS || this.camPass,
+      rtspPath: cmProfile?.RTSP_PATH || this.rtspPath,
     };
     return defProfile;
   }
+
+  // ---------- Queue helpers ----------
+
+  private dequeueSessionEntries(session: Session) {
+    // Remove any queue entries for this session
+    if (!session.queued) return;
+
+    const before = this.captureQueue.length;
+    this.captureQueue = this.captureQueue.filter((q) => q.sid !== session.id);
+    const after = this.captureQueue.length;
+
+    const dev = session.deviceId;
+    const n = this.queuedCountByDevice.get(dev) ?? 0;
+    if (n > 1) this.queuedCountByDevice.set(dev, n - 1);
+    else this.queuedCountByDevice.delete(dev);
+
+    session.queued = false;
+
+    if (before !== after) {
+      this.ctx.log("[rtsp-tunnel] dequeue stale session", {
+        sid: session.id,
+        device: dev,
+        removed: before - after,
+        q: after,
+      });
+    }
+  }
+
+  private enqueueCapture(session: Session, reason: "auto") {
+    if (!this.autoCapture) return;
+
+    if (!this.isWsOpen(session.ws)) return;
+    if (session.closed) return;
+    if (session.captureActive) return;
+
+    if (session.deviceId === "unknown") return;
+    if (this.requireAuth && !session.authed) return;
+
+    // enforce per-device pending limit
+    const dev = session.deviceId;
+    const pending = this.queuedCountByDevice.get(dev) ?? 0;
+    if (pending >= this.queuePerDevice) {
+      // already queued (or too many queued) for this device
+      return;
+    }
+
+    if (this.captureQueue.length >= this.queueMax) {
+      this.ctx.log("[rtsp-tunnel] capture queue full; dropping request", {
+        device: dev,
+        sid: session.id,
+        q: this.captureQueue.length,
+        max: this.queueMax,
+      });
+      // Optionally: emit failed with stage=queue
+      this.events.emitFailed({
+        sessionId: session.id,
+        deviceId: dev,
+        payloadId: session.payloadId,
+        remote: session.remote,
+        stage: "queue",
+        error: "capture queue full",
+      });
+      return;
+    }
+
+    this.captureQueue.push({
+      sid: session.id,
+      deviceId: dev,
+      enqueuedAt: Date.now(),
+      reason,
+    });
+    this.queuedCountByDevice.set(dev, pending + 1);
+    session.queued = true;
+
+    this.enqueueCount += 1;
+    if (this.enqueueCount % this.queueLogEvery === 0) {
+      this.ctx.log("[rtsp-tunnel] queue stats", {
+        q: this.captureQueue.length,
+        devicesQueued: this.queuedCountByDevice.size,
+        inFlight: this.globalCaptureInFlight,
+      });
+    } else {
+      this.ctx.log("[rtsp-tunnel] capture queued", {
+        device: dev,
+        sid: session.id,
+        q: this.captureQueue.length,
+      });
+    }
+
+    void this.drainQueue();
+  }
+
+  private async drainQueue() {
+    if (this.draining) return;
+    this.draining = true;
+
+    try {
+      while (this.started) {
+        if (this.globalCaptureInFlight) return;
+
+        const next = this.captureQueue.shift();
+        if (!next) return;
+
+        // decrement per-device pending now that we're attempting it
+        const devPending = this.queuedCountByDevice.get(next.deviceId) ?? 0;
+        if (devPending > 1)
+          this.queuedCountByDevice.set(next.deviceId, devPending - 1);
+        else this.queuedCountByDevice.delete(next.deviceId);
+
+        const session = this.sessions.get(next.sid);
+        if (!session) continue;
+
+        session.queued = false;
+
+        // Validate again (session could have changed since enqueue)
+        if (session.closed || !this.isWsOpen(session.ws)) continue;
+        if (session.deviceId === "unknown") continue;
+        if (this.requireAuth && !session.authed) continue;
+        if (session.captureActive) continue;
+
+        // Run capture (still 1 at a time)
+        await this.runCaptureForSession(session);
+        // Loop continues; captureOnce will clear globalCaptureInFlight
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  private async runCaptureForSession(session: Session) {
+    try {
+      this.ctx.log("[rtsp-tunnel] capture start", {
+        device: session.deviceId,
+        sid: session.id,
+        remote: session.remote,
+        q: this.captureQueue.length,
+      });
+
+      const params = await this.buildTunnelParams(session.deviceId);
+      const file = await this.captureOnce(session, params);
+      const capturedAt = new Date().toISOString();
+
+      this.events.emitCaptured({
+        sessionId: session.id,
+        deviceId: session.deviceId,
+        payloadId: session.payloadId,
+        remote: session.remote,
+        localPath: file,
+        capturedAt,
+        tzOffsetHours: session.tzOffsetHours ?? null,
+      });
+
+      this.ctx.log("[rtsp-tunnel] capture saved", {
+        device: session.deviceId,
+        sid: session.id,
+        file,
+      });
+
+      // snapshot-window behavior (keep as-is)
+      try {
+        session.ws.close();
+      } catch {}
+    } catch (e: any) {
+      this.ctx.log("[rtsp-tunnel] capture error", {
+        device: session.deviceId,
+        sid: session.id,
+        error: e?.message ?? String(e),
+      });
+
+      try {
+        session.ws.close();
+      } catch {}
+
+      this.events.emitFailed({
+        sessionId: session.id,
+        deviceId: session.deviceId,
+        payloadId: session.payloadId,
+        remote: session.remote,
+        stage: "capture",
+        error: e?.message ?? "unknown error",
+      });
+    }
+  }
+
+  // ---------- capture core ----------
 
   private async captureOnce(
     session: Session,
     params: RtspTunnelTunnelParams,
   ): Promise<string> {
-    if (!this.camPass) throw new Error("CAM_PASS is required");
+    if (!params.camPass) throw new Error("CAM_PASS is required");
     if (!this.isWsOpen(session.ws)) throw new Error("WS not open");
     if (session.captureActive)
       throw new Error("Session capture already active");
@@ -323,7 +550,7 @@ export class RtspTunnelGateway {
     )}:${encodeURIComponent(params.camPass)}@127.0.0.1:${this.proxyPort}${
       params.rtspPath
     }`;
-    // console.log("[rtsp-tunnel] captureOnce rtspUrl=", { rtspUrl });
+
     const code = await new Promise<number>((resolve) => {
       const ff = spawn(
         "ffmpeg",
@@ -336,14 +563,13 @@ export class RtspTunnelGateway {
           "-i",
           rtspUrl,
 
-          "-an", // no audio
+          "-an",
           "-frames:v",
           "1",
           "-q:v",
           "3",
-
           "-update",
-          "1", // <-- single image output
+          "1",
           outFile,
         ],
         { stdio: ["ignore", "inherit", "inherit"] },
@@ -385,58 +611,7 @@ export class RtspTunnelGateway {
     return outFile;
   }
 
-  private maybeAutoCapture(session: Session) {
-    if (!this.autoCapture) return;
-    if (!this.isWsOpen(session.ws)) return;
-    if (session.captureActive) return;
-    if (this.globalCaptureInFlight) return;
-
-    if (session.deviceId === "unknown") return;
-    if (this.requireAuth && !session.authed) return;
-
-    (async () => {
-      try {
-        this.ctx.log("[rtsp-tunnel] auto capture start", {
-          device: session.deviceId,
-          session: session.remote,
-        });
-        const params = await this.buildTunnelParams(session.deviceId);
-        const file = await this.captureOnce(session, params);
-
-        const capturedAt = new Date().toISOString();
-
-        this.events.emitCaptured({
-          sessionId: session.id,
-          deviceId: session.deviceId,
-          payloadId: session.payloadId,
-          remote: session.remote,
-          localPath: file,
-          capturedAt,
-          tzOffsetHours: session.tzOffsetHours ?? null,
-        });
-        this.ctx.log("[rtsp-tunnel] auto capture saved", file);
-
-        // snapshot-window behavior
-        try {
-          session.ws.close();
-        } catch {}
-      } catch (e: any) {
-        this.ctx.log("[rtsp-tunnel] auto capture error", e?.message ?? e);
-        try {
-          session.ws.close();
-        } catch {}
-
-        this.events.emitFailed({
-          sessionId: session.id,
-          deviceId: session.deviceId,
-          payloadId: session.payloadId,
-          remote: session.remote,
-          stage: "capture",
-          error: e?.message ?? "unknown error",
-        });
-      }
-    })();
-  }
+  // ---------- WS handling ----------
 
   private parseHello(
     msg: string,
@@ -448,7 +623,6 @@ export class RtspTunnelGateway {
 
     // HELLO <deviceId>
     if (parts.length === 2) {
-      ``;
       return { payloadId: null, deviceId: parts[1] || "" };
     }
 
@@ -468,6 +642,7 @@ export class RtspTunnelGateway {
       deviceId: "unknown",
       helloAt: null,
       payloadId: null,
+
       nonceB64: null,
       authed: false,
 
@@ -475,9 +650,12 @@ export class RtspTunnelGateway {
       proxySock: null,
       ffmpeg: null,
       tzOffsetHours: null,
+
       helloTimer: null,
       closed: false,
+
       cleanup: () => {},
+      queued: false,
     };
 
     this.sessions.set(id, session);
@@ -489,6 +667,9 @@ export class RtspTunnelGateway {
     const cleanup = (why: string) => {
       if (session.closed) return;
       session.closed = true;
+
+      // Remove any queued work for this session
+      this.dequeueSessionEntries(session);
 
       if (session.helloTimer) {
         clearTimeout(session.helloTimer);
@@ -524,8 +705,11 @@ export class RtspTunnelGateway {
         device: session.deviceId,
         remote,
         sid: id,
-        why: why,
+        why,
       });
+
+      // In case the in-flight capture was canceled, try draining
+      void this.drainQueue();
     };
 
     session.cleanup = cleanup;
@@ -551,6 +735,7 @@ export class RtspTunnelGateway {
           session.tzOffsetHours = await this.pullDeviceTimezoneOffsetHours(
             session.deviceId,
           );
+
           this.ctx.log("[rtsp-tunnel] HELLO", {
             device: session.deviceId,
             tz: session.tzOffsetHours,
@@ -564,7 +749,9 @@ export class RtspTunnelGateway {
           if (!this.requireAuth) {
             session.authed = true;
             this.sendText(ws, "AUTH_OK");
-            this.maybeAutoCapture(session);
+
+            // Phase 1 queue: enqueue instead of capture immediately
+            this.enqueueCapture(session, "auto");
           }
           return;
         }
@@ -604,7 +791,9 @@ export class RtspTunnelGateway {
 
           session.authed = true;
           this.sendText(ws, "AUTH_OK");
-          this.maybeAutoCapture(session);
+
+          // Phase 1 queue: enqueue instead of capture immediately
+          this.enqueueCapture(session, "auto");
           return;
         }
 
@@ -633,6 +822,8 @@ export class RtspTunnelGateway {
       } catch {}
     }, this.helloWaitMs);
   }
+
+  // ---------- TCP proxy handling ----------
 
   private onProxyConnection(ffSock: net.Socket) {
     this.ctx.log("[rtsp-tunnel] ffmpeg connected");
@@ -665,6 +856,7 @@ export class RtspTunnelGateway {
       try {
         if (this.isWsOpen(session.ws)) this.sendClose(session.ws);
       } catch {}
+
       this.ctx.log("[rtsp-tunnel] proxy session ended", {
         device: session.deviceId,
         sid: session.id,

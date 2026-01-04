@@ -27,7 +27,7 @@ export class SqsNotifier implements Notifier {
   private ctx: ModuleContext | null = null;
 
   constructor() {
-    const queueUrl = process.env.SQS_QUEUE_URL?.trim();
+    const queueUrl = envTrim("SQS_QUEUE_URL");
     const region =
       envTrim("AWS_SQS_REGION") ?? envTrim("AWS_REGION") ?? "ap-southeast-1";
 
@@ -126,7 +126,7 @@ export class SqsNotifier implements Notifier {
       event: eventName,
       capturedAt: (payload as any).capturedAt || null,
       at: (payload as any).at || null,
-
+      tzOffsetHours: (payload as any).tzOffsetHours ?? null,
       deviceId: (payload as any).deviceId || "unknown",
       payloadId: (payload as any).payloadId ?? null,
       sessionId: (payload as any).sessionId || null,
